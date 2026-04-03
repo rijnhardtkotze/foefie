@@ -27,9 +27,16 @@ function parseFlags(argv) {
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
     if (arg === "--help" || arg === "-h") out.help = true;
-    if (arg === "--decision") out.decision = args[i + 1];
-    if (arg === "--leaning") out.leaning = args[i + 1];
-    if (arg === "--risk") out.risk = args[i + 1];
+    if (arg === "--decision" || arg === "--leaning" || arg === "--risk") {
+      const value = args[i + 1];
+      if (value === undefined || value.startsWith("--")) {
+        throw new Error(`Missing value for ${arg}`);
+      }
+      if (arg === "--decision") out.decision = value;
+      if (arg === "--leaning") out.leaning = value;
+      if (arg === "--risk") out.risk = value;
+      i += 1;
+    }
   }
 
   return out;

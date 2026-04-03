@@ -38,6 +38,13 @@ test("parseFlags extracts challenge fields", () => {
   });
 });
 
+test("parseFlags rejects missing flag values", () => {
+  assert.throws(
+    () => parseFlags(["--decision"]),
+    /Missing value for --decision/
+  );
+});
+
 test("run challenge prints the summary", () => {
   let out = "";
   let err = "";
