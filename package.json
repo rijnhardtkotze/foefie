@@ -1,0 +1,25 @@
+{
+  "name": "foefie",
+  "version": "1.0.0",
+  "description": "foefie — your terminal's next attempt at a party trick",
+  "main": "src/cli.js",
+  "bin": {
+    "foefie": "bin/foefie.js"
+  },
+  "scripts": {
+    "start": "node bin/foefie.js",
+    "test": "node --test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rijnhardtkotze/foefie.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/rijnhardtkotze/foefie/issues"
+  },
+  "homepage": "https://github.com/rijnhardtkotze/foefie#readme"
+}
