@@ -79,5 +79,5 @@ test("run with no command prints usage including opening", () => {
   });
 
   assert.equal(code, 0);
-  assert.match(out, new RegExp(`Opening: ${OPENING}`));
+  assert.equal(out.includes(`Opening: ${OPENING}`), true);
 });
