@@ -72,13 +72,12 @@ function run(argv, io = { stdout: process.stdout, stderr: process.stderr }) {
     return 1;
   }
 
-  const flags = parseFlags(rest);
-  if (flags.help) {
-    io.stdout.write(`${usage()}\n`);
-    return 0;
-  }
-
   try {
+    const flags = parseFlags(rest);
+    if (flags.help) {
+      io.stdout.write(`${usage()}\n`);
+      return 0;
+    }
     const summary = buildDecisionSummary(flags);
     io.stdout.write(`${summary}\n`);
     return 0;
