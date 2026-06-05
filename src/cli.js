@@ -23,10 +23,19 @@ function buildDecisionSummary(input) {
 function parseFlags(argv) {
   const args = Array.isArray(argv) ? argv : [];
   const out = {};
+  const knownFlags = new Set(["--help", "-h", "--decision", "--leaning", "--risk"]);
 
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
-    if (arg === "--help" || arg === "-h") out.help = true;
+    if (!knownFlags.has(arg)) {
+      throw new Error(`Unknown argument: ${arg}`);
+    }
+
+    if (arg === "--help" || arg === "-h") {
+      out.help = true;
+      continue;
+    }
+
     if (arg === "--decision" || arg === "--leaning" || arg === "--risk") {
       const value = args[i + 1];
       if (value === undefined || value.startsWith("--")) {

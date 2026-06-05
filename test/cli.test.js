@@ -45,6 +45,13 @@ test("parseFlags rejects missing flag values", () => {
   );
 });
 
+test("parseFlags rejects unknown arguments", () => {
+  assert.throws(
+    () => parseFlags(["--decsion", "Start a company"]),
+    /Unknown argument: --decsion/
+  );
+});
+
 test("run challenge prints the summary", () => {
   let out = "";
   let err = "";
