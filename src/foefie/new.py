@@ -4,10 +4,12 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import tomllib
 from pathlib import Path
 
 import typer
 
+from foefie.config import EXAMPLE, write_path
 from foefie.runner import run
 from foefie.workspace import root
 
@@ -82,6 +84,29 @@ def add_to_readme(base: Path, org: str, name: str, description: str) -> bool:
         i += 1
     lines.insert(i, row)
     path.write_text("".join(lines))
+    return True
+
+
+def add_to_config(path: Path, name: str, rel: str, description: str) -> bool:
+    """Append a project to foefie.toml, starting from the bundled example if the file is missing.
+
+    Existing text is never rewritten. Return False, leaving the file as it is, when the name is taken
+    or the file is not valid TOML.
+    """
+    text = path.read_text() if path.exists() else EXAMPLE.read_text()
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return False
+    taken = {p.get("name") for p in data.get("projects", [])}
+    taken |= {c.get("name") for c in data.get("commands", []) if "project" not in c}
+    if name in taken or name == "new":
+        return False
+    entry = "[[projects]]\n" + "".join(
+        f"{key} = {json.dumps(value)}\n" for key, value in (("name", name), ("path", rel), ("help", description or rel))
+    )
+    text =text + ("" if text.endswith("\n") else "\n") + ("\n" if text.strip() else "") + entry
+    path.write_text(text)
     return True
 
 
@@ -224,8 +249,14 @@ def new_project(
         typer.secho("dev.code-workspace already lists it.", dim=True)
     if not add_to_readme(base, org, name, description):
         typer.secho(f"README.md: no `## {org}` table or row already there; add it by hand.", fg=typer.colors.YELLOW)
+    config_file = write_path(base)
+    if not add_to_config(config_file, name, rel.as_posix(), description):
+        typer.secho(
+            f"{config_file}: not changed (name {name!r} is taken or the file is not valid TOML); add it by hand.",
+            fg=typer.colors.YELLOW,
+        )
     if github:
-        desc = ["--description", description] if description else []
+        desc =["--description", description] if description else []
         run(rel, "gh", "repo", "create", f"{org}/{name}", "--private", "--source", ".", "--remote", "origin", *desc)
 
     typer.secho(f"\nCreated {rel}.", fg=typer.colors.GREEN)
