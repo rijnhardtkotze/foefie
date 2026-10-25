@@ -16,11 +16,16 @@ from pathlib import Path
 import typer
 
 def _find_root() -> Path:
-    """The workspace root: the nearest parent holding dev.code-workspace."""
-    for parent in Path(__file__).resolve().parents:
+    """The workspace root: the nearest parent holding dev.code-workspace.
+
+    Search up from the current directory first, so a non-editable install still
+    finds the workspace it is run from. Fall back to this file's location.
+    """
+    start = Path.cwd().resolve()
+    for parent in [start, *start.parents, *Path(__file__).resolve().parents]:
         if (parent / "dev.code-workspace").is_file():
             return parent
-    raise SystemExit("dev.code-workspace not found above " + str(Path(__file__)))
+    raise SystemExit(f"dev.code-workspace not found above {start} or {Path(__file__)}")
 
 
 ROOT = _find_root()
@@ -29,12 +34,12 @@ PASS_ARGS = {"allow_extra_args": True, "ignore_unknown_options": True}
 RUDDERPIN = Path("mantlepin/rudderpin")
 WEBSITE = Path("mantlepin/website")
 CONCERTFORGE = Path("mantlepin-labs/concertforge")
-REA_COMPANION = Path("rea-remote/companion")
-REA_INFRA = Path("rea-remote/infra")
+REA_COMPANION = Path("mantlepin-labs/rea-remote/companion")
+REA_INFRA = Path("mantlepin-labs/rea-remote/infra")
 
 
-def run(where: Path, *cmd: str, extra: list[str] | None = None) -> None:
-    """Run a command in a project directory and exit with its status if it fails."""
+def _run(where: Path, *cmd: str, extra: list[str] | None = None) -> int:
+    """Run a command in a project directory and return its exit status."""
     full = [*cmd, *(extra or [])]
     cwd = ROOT / where
     if not cwd.is_dir():
@@ -48,7 +53,12 @@ def run(where: Path, *cmd: str, extra: list[str] | None = None) -> None:
         )
         raise typer.Exit(127)
     typer.secho(f"[{where}] $ {' '.join(full)}", dim=True)
-    code = subprocess.run(full, cwd=cwd).returncode
+    return subprocess.run(full, cwd=cwd).returncode
+
+
+def run(where: Path, *cmd: str, extra: list[str] | None = None) -> None:
+    """Run a command in a project directory and exit with its status if it fails."""
+    code = _run(where, *cmd, extra=extra)
     if code:
         raise typer.Exit(code)
 
@@ -62,8 +72,11 @@ app = typer.Typer(
 
 @app.command(help="Fast tests: rudderpin and the rea-remote companion.")
 def test() -> None:
-    run(RUDDERPIN, "uv", "run", "pytest")
-    run(REA_COMPANION, "npm", "test")
+    # Run every suite so one failure does not hide the other; exit with the first failure.
+    codes = [_run(RUDDERPIN, "uv", "run", "pytest"), _run(REA_COMPANION, "npm", "test")]
+    code = next((c for c in codes if c), 0)
+    if code:
+        raise typer.Exit(code)
 
 
 # ---- mantlepin/rudderpin (Python, uv) -------------------------------------
