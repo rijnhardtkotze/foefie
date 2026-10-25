@@ -176,6 +176,15 @@ def test_lib_with_real_uv_init(root: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert local_git(project, "user.email") == "rijn@example.com"
 
 
+def test_wizard_prints_next_steps(root: Path) -> None:
+    result = CliRunner().invoke(cli.app, plain("beta/two"), input="y\n")
+
+    assert result.exit_code == 0, result.output
+    assert "Created beta/two." in result.output
+    assert "  goto two\n" in result.output
+    assert '  git add -A && git commit -m "Initial commit"\n' in result.output
+
+
 def plain(target: str, description: str = "") -> list[str]:
     return ["new", target, "-d", description, "-k", "plain", "--author", "", "--email", "", "--no-github"]
 
