@@ -1,6 +1,6 @@
 [project]
 name = "foefie"
-version = "0.1.0"
+version = "0.2.0"
 description = "Task runner for the ~/code workspace"
 requires-python = ">=3.12"
 dependencies = ["typer>=0.12"]
