@@ -1,4 +1,5 @@
 import json
+import shutil
 import subprocess
 import tomllib
 from pathlib import Path
@@ -154,6 +155,24 @@ def test_lib_with_backend_and_author(root: Path, uv_init: list[tuple]) -> None:
     meta = tomllib.loads((project / "pyproject.toml").read_text())
     assert meta["project"]["authors"] == [{"name": "Rijn Kotze", "email": "rijn@example.com"}]
     assert (project / "AGENTS.md").is_file()
+    assert local_git(project, "user.email") == "rijn@example.com"
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="needs uv")
+def test_lib_with_real_uv_init(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # `uv init` needs no network for a project without dependencies; keep it from trying.
+    monkeypatch.setenv("UV_OFFLINE", "1")
+    # org, name, description, type, Python (default), backend, author, email, no GitHub, go ahead
+    answers = "beta\nkit\nA kit\nlib\n\nhatch\nRijn Kotze\nrijn@example.com\nn\ny\n"
+    result = CliRunner().invoke(cli.app, ["new"], input=answers)
+
+    assert result.exit_code == 0, result.output
+    project = root / "beta/kit"
+    meta = tomllib.loads((project / "pyproject.toml").read_text())
+    assert meta["project"]["authors"] == [{"name": "Rijn Kotze", "email": "rijn@example.com"}]
+    assert meta["project"]["description"] == "A kit"
+    assert meta["build-system"]["build-backend"] == "hatchling.build"
+    assert (project / "src/kit/py.typed").exists()
     assert local_git(project, "user.email") == "rijn@example.com"
 
 
