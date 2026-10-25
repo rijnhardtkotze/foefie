@@ -2,6 +2,7 @@
 
     mise run dev -- --help
     mise run dev -- rudderpin test
+    mise run dev -- new             a wizard that starts a new project
     uv run foefie concertforge build
 
 Projects and commands come from foefie.toml (see foefie.example.toml). Extra
@@ -13,6 +14,7 @@ from __future__ import annotations
 import typer
 
 from foefie.config import Command, Config, ConfigError, load_config
+from foefie.new import new_project
 from foefie.runner import _run, run
 
 PASS_ARGS = {"allow_extra_args": True, "ignore_unknown_options": True}
@@ -58,6 +60,7 @@ def build_app(cfg: Config) -> typer.Typer:
                 context_settings=PASS_ARGS if command.passthrough else None,
                 help=command.help or None,
             )(_command(cfg, command))
+    app.command("new", help="Start a new project. Asks for anything not given as an option.")(new_project)
     for name, group in groups.items():
         app.add_typer(group, name=name)
     return app
