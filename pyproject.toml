@@ -33,9 +33,6 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
-[tool.ruff.lint.per-file-ignores]
-"src/foefie/cli.py" = ["E501"]
-
 [tool.towncrier]
 directory = "changelog.d"
 filename = "CHANGELOG.md"

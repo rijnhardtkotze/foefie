@@ -1,0 +1,137 @@
+# foefie.toml: projects and the commands run inside them.
+#
+# foefie reads $FOEFIE_CONFIG if set, else foefie.toml in the workspace root,
+# else this file. Copy it to the workspace root to change anything.
+#
+# [[projects]]  name, path (relative to the workspace root), help
+# [[commands]]  name, project, argv, help, and optionally
+#               cwd         subdirectory of the project to run in
+#               passthrough extra arguments go to the program (default true)
+# A command with no project has `steps` instead of argv: "project command"
+# entries run in order, every one runs, and the first failure's code wins.
+
+[[projects]]
+name = "rudderpin"
+path = "mantlepin/rudderpin"
+help = "mantlepin/rudderpin (Python, uv)."
+
+[[projects]]
+name = "website"
+path = "mantlepin/website"
+help = "mantlepin/website."
+
+[[projects]]
+name = "concertforge"
+path = "mantlepin-labs/concertforge"
+help = "mantlepin-labs/concertforge (bun, turbo)."
+
+[[projects]]
+name = "rea"
+path = "mantlepin-labs/rea-remote"
+help = "rea-remote (companion service, infra)."
+
+[[commands]]
+name = "test"
+help = "Fast tests: rudderpin and the rea-remote companion."
+steps = ["rudderpin test", "rea test"]
+
+# ---- rudderpin ------------------------------------------------------------
+
+[[commands]]
+name = "sync"
+project = "rudderpin"
+argv = ["uv", "sync"]
+help = "Install dependencies."
+
+[[commands]]
+name = "test"
+project = "rudderpin"
+argv = ["uv", "run", "pytest"]
+help = "pytest; no network."
+
+[[commands]]
+name = "serve"
+project = "rudderpin"
+argv = ["uv", "run", "server.py"]
+help = "Run the server on 127.0.0.1:3000."
+
+[[commands]]
+name = "calendars"
+project = "rudderpin"
+argv = ["uv", "run", "scripts/check_calendars.py"]
+help = "Check both calendars answer (read-only)."
+
+[[commands]]
+name = "verify"
+project = "rudderpin"
+argv = ["uv", "run", "verify.py"]
+help = "Four typed turns against live Deepgram (uses quota)."
+
+# ---- website --------------------------------------------------------------
+
+[[commands]]
+name = "dev"
+project = "website"
+argv = ["node", "preview.mjs"]
+help = "Serve dist/ on port 4173 (--port N to change)."
+
+# ---- concertforge ---------------------------------------------------------
+
+[[commands]]
+name = "install"
+project = "concertforge"
+argv = ["bun", "install"]
+help = "bun install."
+
+[[commands]]
+name = "dev"
+project = "concertforge"
+argv = ["bun", "run", "dev"]
+help = "turbo dev."
+
+[[commands]]
+name = "build"
+project = "concertforge"
+argv = ["bun", "run", "build"]
+help = "turbo build."
+
+[[commands]]
+name = "check"
+project = "concertforge"
+argv = ["bun", "run", "check"]
+help = "ultracite check."
+
+[[commands]]
+name = "fix"
+project = "concertforge"
+argv = ["bun", "run", "fix"]
+help = "ultracite fix (edits files)."
+
+[[commands]]
+name = "test"
+project = "concertforge"
+argv = ["bun", "run", "test"]
+help = "turbo test."
+
+# ---- rea-remote -----------------------------------------------------------
+
+[[commands]]
+name = "test"
+project = "rea"
+cwd = "companion"
+argv = ["npm", "test"]
+help = "Companion unit tests."
+
+[[commands]]
+name = "e2e"
+project = "rea"
+cwd = "companion"
+argv = ["npm", "run", "test:e2e", "--"]
+help = "Routing and attack checks. Pass the caddy path: foefie rea e2e /path/to/caddy"
+
+[[commands]]
+name = "plan"
+project = "rea"
+cwd = "infra"
+argv = ["tofu", "plan"]
+help = "tofu plan. Needs the provider tokens scripts/setup.sh exports. No apply here on purpose."

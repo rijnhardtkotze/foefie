@@ -1,5 +1,3 @@
-import subprocess
-
 import pytest
 from typer.testing import CliRunner
 
@@ -17,23 +15,6 @@ def ws(tmp_path, monkeypatch):
     monkeypatch.setattr(runner, "root", lambda: tmp_path)
     monkeypatch.setattr(runner.shutil, "which", lambda name: f"/usr/bin/{name}")
     return tmp_path
-
-
-@pytest.fixture
-def calls(monkeypatch):
-    """Record subprocess.run calls; each returns the next code from `codes` (default 0)."""
-    class Calls(list):
-        codes: list[int]
-
-    made = Calls()
-    made.codes = []
-
-    def fake_run(cmd, cwd=None, **kwargs):
-        made.append((cmd, cwd))
-        return subprocess.CompletedProcess(cmd, made.codes.pop(0) if made.codes else 0)
-
-    monkeypatch.setattr(runner.subprocess, "run", fake_run)
-    return made
 
 
 def test_run_missing_dir_exits_2(ws, calls):
