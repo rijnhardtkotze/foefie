@@ -11,19 +11,23 @@ from foefie.workspace import root
 
 
 def _run(where: Path, *cmd: str, extra: list[str] | None = None) -> int:
-    """Run a command in a project directory and return its exit status."""
+    """Run a command in a project directory and return its exit status.
+
+    A missing directory returns 2 and a missing tool 127, after printing why, so
+    callers running several suites can carry on.
+    """
     full = [*cmd, *(extra or [])]
     cwd = root() / where
     if not cwd.is_dir():
         typer.secho(f"{where} does not exist", fg=typer.colors.RED, err=True)
-        raise typer.Exit(2)
+        return 2
     if shutil.which(full[0]) is None:
         typer.secho(
             f"{full[0]} not found on PATH. Run `mise install` in {root()}.",
             fg=typer.colors.RED,
             err=True,
         )
-        raise typer.Exit(127)
+        return 127
     typer.secho(f"[{where}] $ {' '.join(full)}", dim=True)
     return subprocess.run(full, cwd=cwd).returncode
 
