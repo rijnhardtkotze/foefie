@@ -275,13 +275,55 @@ def _fail(message: str) -> None:
     raise typer.Exit(2)
 
 
+# Project types and the uv init flags behind them. "package" is an app with a
+# build system and a console script; "plain" skips uv.
+KINDS = {
+    "app": ["--app"],
+    "package": ["--app", "--package"],
+    "lib": ["--lib"],
+    "plain": [],
+}
+BACKENDS = ["uv", "hatch", "flit", "pdm", "poetry", "setuptools", "maturin", "scikit"]
+
+
+def _git_config(key: str, cwd: Path | None = None) -> str:
+    out = subprocess.run(["git", "config", key], capture_output=True, text=True, cwd=cwd)
+    return out.stdout.strip()
+
+
+def _ask_choice(label: str, choices: list[str], default: str) -> str:
+    while True:
+        answer = typer.prompt(f"{label} ({'/'.join(choices)})", default=default).strip()
+        if answer in choices:
+            return answer
+        typer.secho(f"Pick one of: {', '.join(choices)}", fg=typer.colors.RED)
+
+
+def set_authors(pyproject: Path, name: str, email: str) -> None:
+    """Write an authors entry above requires-python; uv init was told to leave it out."""
+    fields = ", ".join(f"{k} = {json.dumps(v)}" for k, v in (("name", name), ("email", email)) if v)
+    if not fields:
+        return
+    text = pyproject.read_text()
+    text = text.replace("requires-python", f"authors = [\n    {{ {fields} }}\n]\nrequires-python", 1)
+    pyproject.write_text(text)
+
+
 @app.command(help="Start a new project. Asks for anything not given as an option.")
 def new(
     target: str = typer.Argument("", metavar="[ORG/NAME]", help="Skip the org and name questions."),
     description: str = typer.Option(None, "--description", "-d", help="One line for the README and AGENTS.md."),
-    python: bool = typer.Option(None, "--python/--plain", help="uv package, or just git and a README."),
+    kind: str = typer.Option(None, "--kind", "-k", help="app, package (app with a build system), lib, or plain (git only)."),
+    python: str = typer.Option(None, "--python", "-p", help="Python version for uv init; empty for uv's default."),
+    backend: str = typer.Option(None, "--build-backend", help=f"For package and lib: {', '.join(BACKENDS)}."),
+    author: str = typer.Option(None, "--author", help="Author name; defaults to git config user.name."),
+    email: str = typer.Option(None, "--email", help="Author email; defaults to git config user.email."),
     github: bool = typer.Option(None, "--github/--no-github", help="Create a private GitHub repo (no push)."),
 ) -> None:
+    if kind is not None and kind not in KINDS:
+        _fail(f"--kind must be one of: {', '.join(KINDS)}")
+    if backend is not None and backend not in BACKENDS:
+        _fail(f"--build-backend must be one of: {', '.join(BACKENDS)}")
     orgs = workspace_orgs(ROOT)
     if target:
         org, _, name = target.partition("/")
@@ -296,25 +338,56 @@ def new(
         name = _ask_name(org)
     if description is None:
         description = typer.prompt("One-line description", default="", show_default=False).strip()
-    if python is None:
-        python = typer.confirm("Python package (uv)? No gives just git and a README", default=True)
+    if kind is None:
+        typer.echo("Types: app (script), package (app you can install), lib (library), plain (git only)")
+        kind = _ask_choice("Type", list(KINDS), "package")
+    if kind != "plain":
+        if python is None:
+            python = typer.prompt("Python version (empty for uv's default)", default="", show_default=False).strip()
+        if kind in ("package", "lib") and backend is None:
+            backend = _ask_choice("Build backend", BACKENDS, "uv")
+    if author is None:
+        default = _git_config("user.name")
+        author = typer.prompt("Author name", default=default, show_default=bool(default)).strip()
+    if email is None:
+        default = _git_config("user.email")
+        email = typer.prompt("Author email", default=default, show_default=bool(default)).strip()
     if github is None:
         github = typer.confirm(f"Create private GitHub repo {org}/{name}?", default=False)
 
     rel = Path(org, name)
-    typer.echo(f"\nCreating {rel}: {'uv package' if python else 'plain'}{', GitHub' if github else ''}")
+    summary = [kind]
+    if kind != "plain":
+        summary.append(f"Python {python or 'default'}")
+    if backend and kind in ("package", "lib"):
+        summary.append(f"{backend} backend")
+    summary.append(f"author {author or '-'} <{email or '-'}>")
+    if github:
+        summary.append("GitHub")
+    typer.echo(f"\nCreating {rel}: {', '.join(summary)}")
     if not typer.confirm("Go ahead?", default=True):
         raise typer.Abort()
 
-    if python:
-        desc = ["--description", description] if description else []
-        run(Path(org), "uv", "init", "--package", "--vcs", "git", "--no-workspace", *desc, name)
+    if kind != "plain":
+        flags = [*KINDS[kind], "--vcs", "git", "--no-workspace", "--author-from", "none"]
+        if description:
+            flags += ["--description", description]
+        if python:
+            flags += ["--python", python]
+        if backend and kind in ("package", "lib"):
+            flags += ["--build-backend", backend]
+        run(Path(org), "uv", "init", *flags, name)
+        set_authors(ROOT / rel / "pyproject.toml", author, email)
     else:
         (ROOT / rel).mkdir(parents=True)
         run(rel, "git", "init", "-q")
         (ROOT / rel / "README.md").write_text(f"# {name}\n" + (f"\n{description}\n" if description else ""))
     (ROOT / rel / "AGENTS.md").write_text(AGENTS_MD.format(name=name, description=description or "TODO: what this is."))
     (ROOT / rel / "CLAUDE.md").write_text("@AGENTS.md\n")
+    # Commits in this repo carry the author given above, whatever the global git config says.
+    for key, value in (("user.name", author), ("user.email", email)):
+        if value and value != _git_config(key, ROOT / rel):
+            subprocess.run(["git", "config", key, value], cwd=ROOT / rel, check=True)
 
     if not add_to_workspace(ROOT, rel.as_posix()):
         typer.secho("dev.code-workspace already lists it.", dim=True)
