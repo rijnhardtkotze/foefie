@@ -2,6 +2,7 @@
 
     mise run dev -- --help
     mise run dev -- rudderpin test
+    mise run dev -- new             a wizard that starts a new project
     uv run foefie concertforge build
 
 Extra arguments after a command go to the underlying program, for example
@@ -9,6 +10,8 @@ Extra arguments after a command go to the underlying program, for example
 """
 from __future__ import annotations
 
+import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -176,6 +179,154 @@ def e2e(ctx: typer.Context) -> None:
 @rea.command(context_settings=PASS_ARGS, help="tofu plan. Needs the provider tokens scripts/setup.sh exports. No apply here on purpose.")
 def plan(ctx: typer.Context) -> None:
     run(REA_INFRA, "tofu", "plan", extra=ctx.args)
+
+
+# ---- new project ----------------------------------------------------------
+
+NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+
+AGENTS_MD = """# {name}
+
+{description}
+
+## Rules
+
+- Tool versions come from `mise.toml` in ~/code; add a project `mise.toml` only to pin something different.
+- Workspace rules are in ~/code/AGENTS.md.
+"""
+
+
+def workspace_orgs(root: Path) -> list[str]:
+    """Org folders, in the order dev.code-workspace lists them."""
+    folders = json.loads((root / "dev.code-workspace").read_text())["folders"]
+    orgs = [f["path"].split("/")[0] for f in folders if "/" in f.get("path", "")]
+    return list(dict.fromkeys(orgs))
+
+
+def add_to_workspace(root: Path, rel: str) -> bool:
+    """List a folder in dev.code-workspace. Return False if it is already there."""
+    path = root / "dev.code-workspace"
+    data = json.loads(path.read_text())
+    folders = data["folders"]
+    if any(f.get("path") == rel for f in folders):
+        return False
+    org = rel.split("/")[0] + "/"
+    same = [i for i, f in enumerate(folders) if f.get("path", "").startswith(org)]
+    # Keep each org's folders in name order; a new org goes last.
+    at = next((i for i in same if folders[i]["path"] > rel), same[-1] + 1 if same else len(folders))
+    folders.insert(at, {"name": rel, "path": rel})
+    path.write_text(json.dumps(data, indent="\t", ensure_ascii=False) + "\n")
+    return True
+
+
+def add_to_readme(root: Path, org: str, name: str, description: str) -> bool:
+    """Add a row to the README table under `## <org>`, in name order.
+
+    Return False when there is no such table or the project is already in it.
+    """
+    path = root / "README.md"
+    lines = path.read_text().splitlines(keepends=True)
+    start = next((i for i, line in enumerate(lines) if line.strip() == f"## {org}"), None)
+    if start is None:
+        return False
+    i = start + 1
+    while i < len(lines) and not lines[i].startswith("| ---"):
+        if lines[i].startswith("## "):
+            return False
+        i += 1
+    i += 1
+    row = f"| [{name}]({org}/{name}) | [{org}/{name}](https://github.com/{org}/{name}) | {description} |\n"
+    while i < len(lines) and lines[i].startswith("|"):
+        if lines[i].startswith(f"| [{name}]("):
+            return False
+        if lines[i].lower() > row.lower():
+            break
+        i += 1
+    lines.insert(i, row)
+    path.write_text("".join(lines))
+    return True
+
+
+def _ask_org(orgs: list[str]) -> str:
+    for n, org in enumerate(orgs, 1):
+        typer.echo(f"  {n}. {org}")
+    while True:
+        answer = typer.prompt("Org (number or name)", default="1").strip()
+        if answer.isdigit() and 1 <= int(answer) <= len(orgs):
+            return orgs[int(answer) - 1]
+        if answer in orgs:
+            return answer
+        typer.secho(f"Pick 1-{len(orgs)} or one of: {', '.join(orgs)}", fg=typer.colors.RED)
+
+
+def _ask_name(org: str) -> str:
+    while True:
+        name = typer.prompt("Project name").strip()
+        if not NAME_RE.fullmatch(name):
+            typer.secho("Use letters, digits, '.', '_' or '-'.", fg=typer.colors.RED)
+        elif (ROOT / org / name).exists():
+            typer.secho(f"{org}/{name} already exists.", fg=typer.colors.RED)
+        else:
+            return name
+
+
+def _fail(message: str) -> None:
+    typer.secho(message, fg=typer.colors.RED, err=True)
+    raise typer.Exit(2)
+
+
+@app.command(help="Start a new project. Asks for anything not given as an option.")
+def new(
+    target: str = typer.Argument("", metavar="[ORG/NAME]", help="Skip the org and name questions."),
+    description: str = typer.Option(None, "--description", "-d", help="One line for the README and AGENTS.md."),
+    python: bool = typer.Option(None, "--python/--plain", help="uv package, or just git and a README."),
+    github: bool = typer.Option(None, "--github/--no-github", help="Create a private GitHub repo (no push)."),
+) -> None:
+    orgs = workspace_orgs(ROOT)
+    if target:
+        org, _, name = target.partition("/")
+        if org not in orgs:
+            _fail(f"Unknown org {org!r}. Known: {', '.join(orgs)}")
+        if not NAME_RE.fullmatch(name):
+            _fail("Give the project as <org>/<name>, e.g. rijnhardtkotze/tidy")
+        if (ROOT / org / name).exists():
+            _fail(f"{org}/{name} already exists.")
+    else:
+        org = _ask_org(orgs)
+        name = _ask_name(org)
+    if description is None:
+        description = typer.prompt("One-line description", default="", show_default=False).strip()
+    if python is None:
+        python = typer.confirm("Python package (uv)? No gives just git and a README", default=True)
+    if github is None:
+        github = typer.confirm(f"Create private GitHub repo {org}/{name}?", default=False)
+
+    rel = Path(org, name)
+    typer.echo(f"\nCreating {rel}: {'uv package' if python else 'plain'}{', GitHub' if github else ''}")
+    if not typer.confirm("Go ahead?", default=True):
+        raise typer.Abort()
+
+    if python:
+        desc = ["--description", description] if description else []
+        run(Path(org), "uv", "init", "--package", "--vcs", "git", "--no-workspace", *desc, name)
+    else:
+        (ROOT / rel).mkdir(parents=True)
+        run(rel, "git", "init", "-q")
+        (ROOT / rel / "README.md").write_text(f"# {name}\n" + (f"\n{description}\n" if description else ""))
+    (ROOT / rel / "AGENTS.md").write_text(AGENTS_MD.format(name=name, description=description or "TODO: what this is."))
+    (ROOT / rel / "CLAUDE.md").write_text("@AGENTS.md\n")
+
+    if not add_to_workspace(ROOT, rel.as_posix()):
+        typer.secho("dev.code-workspace already lists it.", dim=True)
+    if not add_to_readme(ROOT, org, name, description):
+        typer.secho(f"README.md: no `## {org}` table or row already there; add it by hand.", fg=typer.colors.YELLOW)
+    if github:
+        desc = ["--description", description] if description else []
+        run(rel, "gh", "repo", "create", f"{org}/{name}", "--private", "--source", ".", "--remote", "origin", *desc)
+
+    typer.secho(f"\nCreated {rel}.", fg=typer.colors.GREEN)
+    typer.echo(f"  goto {name}")
+    typer.echo('  git add -A && git commit -m "Initial commit"')
 
 
 if __name__ == "__main__":
