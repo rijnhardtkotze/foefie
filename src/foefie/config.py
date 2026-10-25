@@ -61,6 +61,18 @@ def config_path() -> Path:
     return own if own.is_file() else EXAMPLE
 
 
+def write_path(base: Path) -> Path:
+    """The file `foefie new` adds projects to: FOEFIE_CONFIG if set, else foefie.toml in the root.
+
+    Never the bundled example, which is read-only reference.
+    """
+    if env := os.environ.get(ENV_VAR):
+        path = Path(env).expanduser()
+        if path.resolve() != EXAMPLE.resolve():
+            return path
+    return base / CONFIG_NAME
+
+
 def load_config(path: Path | None = None) -> Config:
     path = path or config_path()
     try:

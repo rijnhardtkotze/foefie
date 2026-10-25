@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from foefie import cli, new, runner
+from foefie import cli, config, new, runner
 
 README = """# ~/code
 
@@ -155,3 +155,41 @@ def test_lib_with_backend_and_author(root: Path, uv_init: list[tuple]) -> None:
     assert meta["project"]["authors"] == [{"name": "Rijn Kotze", "email": "rijn@example.com"}]
     assert (project / "AGENTS.md").is_file()
     assert local_git(project, "user.email") == "rijn@example.com"
+
+
+def plain(target: str, description: str = "") -> list[str]:
+    return ["new", target, "-d", description, "-k", "plain", "--author", "", "--email", "", "--no-github"]
+
+
+def test_project_is_appended_to_foefie_toml(root: Path) -> None:
+    result = CliRunner().invoke(cli.app, plain("beta/two", "Two"), input="y\n")
+
+    assert result.exit_code == 0, result.output
+    # No foefie.toml yet, so it starts from the bundled example; the example itself stays untouched.
+    text = (root / "foefie.toml").read_text()
+    assert text.startswith(config.EXAMPLE.read_text())
+    assert "beta/two" not in config.EXAMPLE.read_text()
+    cfg = config.load_config(root / "foefie.toml")
+    assert cfg.projects["two"] == config.Project("two", Path("beta/two"), "Two")
+    assert "rudderpin" in cfg.projects
+
+
+def test_existing_foefie_toml_entries_are_kept(root: Path) -> None:
+    own = (
+        "# mine\n"
+        '[[projects]]\nname = "two"\npath = "elsewhere/two"\n\n'
+        '[[projects]]\nname = "other"\npath = "beta/one"\n'
+    )
+    (root / "foefie.toml").write_text(own)
+    result = CliRunner().invoke(cli.app, plain("beta/two"), input="y\n")
+
+    # A project already named "two" is never replaced; the wizard says so and still creates the folder.
+    assert result.exit_code == 0, result.output
+    assert "foefie.toml" in result.output
+    assert (root / "foefie.toml").read_text() == own
+    assert (root / "beta/two").is_dir()
+
+    assert CliRunner().invoke(cli.app, plain("beta/three"), input="y\n").exit_code == 0
+    text = (root / "foefie.toml").read_text()
+    assert text.startswith(own)
+    assert list(config.load_config(root / "foefie.toml").projects) == ["two", "other", "three"]
