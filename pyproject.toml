@@ -2,7 +2,7 @@
 name = "foefie"
 version = "0.1.0"
 description = "Task runner for the ~/code workspace"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = ["typer>=0.12"]
 
 [project.urls]
@@ -11,9 +11,50 @@ Repository = "https://github.com/rijnhardtkotze/foefie"
 [project.scripts]
 foefie = "foefie.cli:app"
 
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6", "towncrier>=24.8"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/foefie"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/foefie/cli.py" = ["E501"]
+
+[tool.towncrier]
+directory = "changelog.d"
+filename = "CHANGELOG.md"
+package = "foefie"
+package_dir = "src"
+title_format = "## {version} ({project_date})"
+issue_format = "[#{issue}](https://github.com/rijnhardtkotze/foefie/issues/{issue})"
+
+[[tool.towncrier.type]]
+directory = "added"
+name = "Added"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "changed"
+name = "Changed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "fixed"
+name = "Fixed"
+showcontent = true

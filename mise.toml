@@ -1,0 +1,14 @@
+[tools]
+uv = "0.12.18"
+
+[tasks.test]
+description = "Run the test suite"
+run = "uv run pytest"
+
+[tasks.lint]
+description = "Check style and imports with ruff"
+run = "uv run ruff check ."
+
+[tasks.ci]
+description = "Lint, then test"
+depends = ["lint", "test"]
