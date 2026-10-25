@@ -9,26 +9,14 @@ Extra arguments after a command go to the underlying program, for example
 """
 from __future__ import annotations
 
-import shutil
-import subprocess
 from pathlib import Path
 
 import typer
 
-def _find_root() -> Path:
-    """The workspace root: the nearest parent holding dev.code-workspace.
+from foefie.runner import _run, run
+from foefie.workspace import root
 
-    Search up from the current directory first, so a non-editable install still
-    finds the workspace it is run from. Fall back to this file's location.
-    """
-    start = Path.cwd().resolve()
-    for parent in [start, *start.parents, *Path(__file__).resolve().parents]:
-        if (parent / "dev.code-workspace").is_file():
-            return parent
-    raise SystemExit(f"dev.code-workspace not found above {start} or {Path(__file__)}")
-
-
-ROOT = _find_root()
+ROOT = root()
 PASS_ARGS = {"allow_extra_args": True, "ignore_unknown_options": True}
 
 RUDDERPIN = Path("mantlepin/rudderpin")
@@ -36,31 +24,6 @@ WEBSITE = Path("mantlepin/website")
 CONCERTFORGE = Path("mantlepin-labs/concertforge")
 REA_COMPANION = Path("mantlepin-labs/rea-remote/companion")
 REA_INFRA = Path("mantlepin-labs/rea-remote/infra")
-
-
-def _run(where: Path, *cmd: str, extra: list[str] | None = None) -> int:
-    """Run a command in a project directory and return its exit status."""
-    full = [*cmd, *(extra or [])]
-    cwd = ROOT / where
-    if not cwd.is_dir():
-        typer.secho(f"{where} does not exist", fg=typer.colors.RED, err=True)
-        raise typer.Exit(2)
-    if shutil.which(full[0]) is None:
-        typer.secho(
-            f"{full[0]} not found on PATH. Run `mise install` in {ROOT}.",
-            fg=typer.colors.RED,
-            err=True,
-        )
-        raise typer.Exit(127)
-    typer.secho(f"[{where}] $ {' '.join(full)}", dim=True)
-    return subprocess.run(full, cwd=cwd).returncode
-
-
-def run(where: Path, *cmd: str, extra: list[str] | None = None) -> None:
-    """Run a command in a project directory and exit with its status if it fails."""
-    code = _run(where, *cmd, extra=extra)
-    if code:
-        raise typer.Exit(code)
 
 
 app = typer.Typer(
