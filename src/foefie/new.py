@@ -260,3 +260,5 @@ def new_project(
         run(rel, "gh", "repo", "create", f"{org}/{name}", "--private", "--source", ".", "--remote", "origin", *desc)
 
     typer.secho(f"\nCreated {rel}.", fg=typer.colors.GREEN)
+    typer.echo(f"  goto {name}")
+    typer.echo('  git add -A && git commit -m "Initial commit"')
