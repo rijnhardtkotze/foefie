@@ -1,0 +1,1 @@
+`foefie.toml` can no longer define a project or a top-level command named `new`, which would have given two `new` entries next to the built-in wizard. The loader rejects it with an error naming the file and key. A command named `new` inside a project (`foefie <project> new`) is still allowed.

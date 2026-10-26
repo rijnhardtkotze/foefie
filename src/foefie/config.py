@@ -12,6 +12,9 @@ CONFIG_NAME = "foefie.toml"
 ENV_VAR = "FOEFIE_CONFIG"
 EXAMPLE = Path(__file__).with_name("foefie.example.toml")
 
+# Top-level names the CLI defines itself; a project or top-level command cannot use them.
+RESERVED = frozenset({"new"})
+
 PROJECT_KEYS = {"name", "path", "help"}
 COMMAND_KEYS = {"name", "project", "argv", "cwd", "help", "passthrough", "steps"}
 
@@ -99,6 +102,8 @@ def _parse(path: Path, data: dict) -> Config:
         at = f"projects[{i}]"
         _only(raw, PROJECT_KEYS, at, fail)
         name = _text(raw, "name", at, fail)
+        if name in RESERVED:
+            raise fail(f"{at}.name", f"{name!r} is a built-in command and cannot be a project")
         if name in projects:
             raise fail(f"{at}.name", f"duplicate project {name!r}")
         projects[name] = Project(name, _relative(raw, "path", at, fail), _text(raw, "help", at, fail, ""))
@@ -111,6 +116,8 @@ def _parse(path: Path, data: dict) -> Config:
         project = raw.get("project")
         if project is not None and project not in projects:
             raise fail(f"{at}.project", f"unknown project {project!r}")
+        if project is None and name in RESERVED:
+            raise fail(f"{at}.name", f"{name!r} is a built-in command and cannot be redefined")
         if project is None and name in projects:
             raise fail(f"{at}.name", f"{name!r} is already a project")
         if any(c.project == project and c.name == name for c in commands):
