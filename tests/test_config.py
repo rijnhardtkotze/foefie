@@ -145,6 +145,11 @@ BAD = {
         '[[projects]]\nname = "p"\npath = "p"\n[[commands]]\nname = "p"\nsteps = []\n',
         "commands[0].name",
     ),
+    "top-level command named new": (
+        '[[projects]]\nname = "p"\npath = "p"\n[[commands]]\nname = "new"\nsteps = ["p x"]\n',
+        "commands[0].name",
+    ),
+    "project named new": ('[[projects]]\nname = "new"\npath = "p"\n', "projects[0].name"),
 }
 
 
@@ -156,6 +161,15 @@ def test_config_invalid_reports_key(tmp_path, text, key):
     message = str(err.value)
     assert str(path) in message
     assert key in message
+
+
+def test_config_allows_new_inside_a_project(tmp_path):
+    # `foefie p new` does not collide with the built-in `foefie new`.
+    path = write(
+        tmp_path,
+        '[[projects]]\nname = "p"\npath = "p"\n[[commands]]\nname = "new"\nproject = "p"\nargv = ["a"]\n',
+    )
+    assert load_config(path).command("p", "new").argv == ("a",)
 
 
 def test_config_invalid_toml_reports_file(tmp_path):

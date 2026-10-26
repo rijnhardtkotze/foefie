@@ -9,7 +9,7 @@ from pathlib import Path
 
 import typer
 
-from foefie.config import EXAMPLE, write_path
+from foefie.config import EXAMPLE, RESERVED, write_path
 from foefie.runner import run
 from foefie.workspace import root
 
@@ -100,7 +100,7 @@ def add_to_config(path: Path, name: str, rel: str, description: str) -> bool:
         return False
     taken = {p.get("name") for p in data.get("projects", [])}
     taken |= {c.get("name") for c in data.get("commands", []) if "project" not in c}
-    if name in taken or name == "new":
+    if name in taken or name in RESERVED:
         return False
     entry = "[[projects]]\n" + "".join(
         f"{key} = {json.dumps(value)}\n" for key, value in (("name", name), ("path", rel), ("help", description or rel))
